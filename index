@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weekplan Tracker</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/supabase/2.39.0/supabase.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .status-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            z-index: 100;
+        }
+
+        .status-connected {
+            background: #10b981;
+            color: white;
+        }
+
+        .status-disconnected {
+            background: #ef4444;
+            color: white;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .setup-section, .teacher-section, .student-section {
+            display: none;
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        .setup-section.active, .teacher-section.active, .student-section.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #374151;
+            font-size: 14px;
+        }
+
+        input[type="text"], input[type="url"], input[type="password"], select {
+            width: 100%;
+            padding: 15px 20px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: #f9fafb;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #4f46e5;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 5px 5px 5px 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(79, 70, 229, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+
+        .btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .alert {
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+            font-weight: 500;
+        }
+
+        .alert.success {
+            background: #d1fae5;
+            color: #065f46;
+            border-left: 4px solid #10b981;
+        }
+
+        .alert.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border-left: 4px solid #ef4444;
+        }
+
+        .alert.info {
+            background: #dbeafe;
+            color: #1e40af;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+        }
+
+        .card {
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 25px;
+            border: 1px solid #e2e8f0;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+
+        .card h3 {
+            color: #1e293b;
+            margin-bottom: 20px;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: white;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            border: 1px solid #e2e8f0;
+            transition: all 0.3s ease;
+        }
+
+        .list-item:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .list-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .student-info {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .student-info h2 {
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+        }
+
+        .progress-container {
+            margin: 20px 0;
+        }
+
+        .progress-bar {
+            background: rgba(255,255,255,0.3);
+            border-radius: 10px;
+            height: 12px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            background: white;
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.5s ease;
+            min-width: 2px;
+        }
+
+        .task-item {
+            display: flex;
+            align-items: center;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            border: 2px solid #e2e8f0;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .task-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        }
+
+        .task-item.completed {
+            background: #f0fdf4;
+            border-color: #10b981;
+        }
+
+        .task-checkbox {
+            width: 24px;
+            height: 24px;
+            margin-right: 20px;
+            cursor: pointer;
+            accent-color: #10b981;
+        }
+
+        .task-name {
+            flex-grow: 1;
+            font-size: 16px;
+            font-weight: 500;
+            color: #1f2937;
+        }
+
+        .task-item.completed .task-name {
+            text-decoration: line-through;
+            color: #6b7280;
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            justify-content: center;
+        }
+
+        .mode-btn {
+            padding: 12px 24px;
+            border: 2px solid #e5e7eb;
+            background: white;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .mode-btn.active {
+            background: #4f46e5;
+            color: white;
+            border-color: #4f46e5;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+
+        .spinner {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #4f46e5;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .setup-instructions {
+            background: #f0f9ff;
+            border: 1px solid #0ea5e9;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .setup-instructions h4 {
+            color: #0c4a6e;
+            margin-bottom: 10px;
+        }
+
+        .setup-instructions ol {
+            color: #0369a1;
+            margin-left: 20px;
+        }
+
+        .setup-instructions li {
+            margin: 5px 0;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 15px;
+            }
+            
+            .header {
+                padding: 30px 20px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .mode-selector {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="status-indicator" id="statusIndicator">Verbinding verbroken</div>
+        
+        <div class="header">
+            <h1>📚 Weekplan Tracker</h1>
+            <p>Real-time taken beheer voor leerlingen</p>
+        </div>
+
+        <div class="content">
+            <!-- Database Setup Section -->
+            <div class="setup-section active" id="setupSection">
+                <div class="setup-instructions">
+                    <h4>🚀 Database Configuratie</h4>
+                    <p>Voer je Supabase gegevens in om te beginnen. Deze worden veilig opgeslagen in je browser.</p>
+                </div>
+                
+                <div class="form-group">
+                    <label for="supabaseUrl">Supabase URL:</label>
+                    <input type="url" id="supabaseUrl" placeholder="https://jouwproject.supabase.co" 
+                           value="https://qyapiwgjekciskhcybao.supabase.co">
+                </div>
+                
+                <div class="form-group">
+                    <label for="supabaseKey">Supabase Anon Key:</label>
+                    <input type="text" id="supabaseKey" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." 
+                           value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF5YXBpd2dqZWtjaXNraGN5YmFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgxODM3MDYsImV4cCI6MjA3Mzc1OTcwNn0.afK6cscAT4tLVB0psRCa6cx6S_NzhhEpf8nQ97m8qXo">
+                </div>
+                
+                <div class="form-group">
+                    <label for="teacherPassword">Leerkracht Wachtwoord:</label>
+                    <input type="password" id="teacherPassword" placeholder="weekplan2024" value="weekplan2024">
+                    <small style="color: #6b7280; margin-top: 5px; display: block;">Standaard: weekplan2024 (pas dit aan voor beveiliging)</small>
+                </div>
+
+                <button class="btn" onclick="connectToDatabase()">
+                    <span>🔗</span> Verbinden met Database
+                </button>
+
+                <div id="setupMessage"></div>
+
+                <div class="setup-instructions" style="margin-top: 30px;">
+                    <h4>📖 Hulp nodig?</h4>
+                    <ol>
+                        <li>Ga naar <strong>supabase.com</strong> en maak een project aan</li>
+                        <li>Ga naar <strong>Settings → API</strong></li>
+                        <li>Kopieer je <strong>URL</strong> en <strong>anon key</strong></li>
+                        <li>Voer de SQL queries uit voor de tabellen</li>
+                        <li>Vul de gegevens hierboven in en klik verbinden</li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- Mode Selection -->
+            <div class="mode-selector" id="modeSelector" style="display: none;">
+                <div class="mode-btn active" id="teacherModeBtn" onclick="switchToTeacherMode()">
+                    👩‍🏫 Leerkracht Mode
+                </div>
+                <div class="mode-btn" id="studentModeBtn" onclick="switchToStudentMode()">
+                    👩‍🎓 Leerling Mode  
+                </div>
+            </div>
+
+            <!-- Teacher Section -->
+            <div class="teacher-section" id="teacherSection">
+                <div class="grid">
+                    <div class="card">
+                        <h3>👥 Leerlingen Beheer</h3>
+                        <div class="form-group">
+                            <input type="text" id="newStudentName" placeholder="Naam van nieuwe leerling">
+                            <button class="btn btn-success" onclick="addStudent()">
+                                <span>➕</span> Leerling Toevoegen
+                            </button>
+                        </div>
+                        <div id="studentsList">
+                            <div class="loading">
+                                <div class="spinner"></div>
+                                Leerlingen laden...
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3>📝 Taken Beheer</h3>
+                        <div class="form-group">
+                            <input type="text" id="newTaskName" placeholder="Naam van nieuwe taak">
+                            <button class="btn btn-success" onclick="addTask()">
+                                <span>➕</span> Taak Toevoegen
+                            </button>
+                        </div>
+                        <div id="tasksList">
+                            <div class="loading">
+                                <div class="spinner"></div>
+                                Taken laden...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 30px; text-align: center;">
+                    <button class="btn btn-secondary" onclick="resetAllProgress()">
+                        🔄 Alle Voortgang Resetten
+                    </button>
+                </div>
+            </div>
+
+            <!-- Student Section -->
+            <div class="student-section" id="studentSection">
+                <div class="form-group">
+                    <label for="studentSelect">Selecteer je naam:</label>
+                    <select id="studentSelect" onchange="loadStudentTasks()">
+                        <option value="">-- Kies je naam --</option>
+                    </select>
+                </div>
+
+                <div id="studentInfo" style="display: none;">
+                    <div class="student-info">
+                        <h2 id="selectedStudentName">Welkom!</h2>
+                        <div class="progress-container">
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                            </div>
+                            <p id="progressText">0 van 0 taken voltooid</p>
+                        </div>
+                    </div>
+
+                    <div id="studentTasks">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            Taken laden...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let supabase = null;
+        let currentStudent = null;
+        let teacherPassword = 'weekplan2024';
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSavedConfig();
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            // Enter key handlers
+            document.getElementById('newStudentName').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') addStudent();
+            });
+            
+            document.getElementById('newTaskName').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') addTask();
+            });
+        }
+
+        function loadSavedConfig() {
+            const savedUrl = localStorage.getItem('supabaseUrl');
+            const savedKey = localStorage.getItem('supabaseKey');
+            const savedPassword = localStorage.getItem('teacherPassword');
+
+            if (savedUrl) document.getElementById('supabaseUrl').value = savedUrl;
+            if (savedKey) document.getElementById('supabaseKey').value = savedKey;
+            if (savedPassword) {
+                document.getElementById('teacherPassword').value = savedPassword;
+                teacherPassword = savedPassword;
+            }
+
+            if (savedUrl && savedKey) {
+                connectToDatabase();
+            }
+        }
+
+        async function connectToDatabase() {
+            const url = document.getElementById('supabaseUrl').value.trim();
+            const key = document.getElementById('supabaseKey').value.trim();
+            const password = document.getElementById('teacherPassword').value.trim();
+
+            if (!url || !key) {
+                showMessage('setupMessage', 'Vul alle velden in!', 'error');
+                return;
+            }
+
+            try {
+                // Check if supabase is available
+                if (typeof window.supabase === 'undefined') {
+                    throw new Error('Supabase library niet geladen. Herlaad de pagina.');
+                }
+
+                showMessage('setupMessage', 'Verbinding maken...', 'info');
+
+                // Create Supabase client
+                supabase = window.supabase.createClient(url, key);
+
+                // Test connection by checking tables
+                const { data, error } = await supabase
+                    .from('students')
+                    .select('count')
+                    .limit(1);
+
+                if (error) {
+                    throw new Error(`Database fout: ${error.message}`);
+                }
+
+                // Save configuration
+                localStorage.setItem('supabaseUrl', url);
+                localStorage.setItem('supabaseKey', key);
+                localStorage.setItem('teacherPassword', password);
+                teacherPassword = password;
+
+                // Update UI
+                updateConnectionStatus(true);
+                showMessage('setupMessage', 'Verbinding succesvol! 🎉', 'success');
+                
+                // Hide setup, show mode selector
+                document.getElementById('setupSection').classList.remove('active');
+                document.getElementById('modeSelector').style.display = 'flex';
+                
+                // Default to teacher mode
+                switchToTeacherMode();
+
+            } catch (error) {
+                console.error('Verbindingsfout:', error);
+                updateConnectionStatus(false);
+                showMessage('setupMessage', `Verbinding mislukt: ${error.message}`, 'error');
+            }
+        }
+
+        function updateConnectionStatus(connected) {
+            const indicator = document.getElementById('statusIndicator');
+            if (connected) {
+                indicator.textContent = 'Verbonden';
+                indicator.className = 'status-indicator status-connected';
+            } else {
+                indicator.textContent = 'Verbinding verbroken';
+                indicator.className = 'status-indicator status-disconnected';
+            }
+        }
+
+        function showMessage(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="alert ${type}">${message}</div>`;
+            
+            if (type === 'success') {
+                setTimeout(() => element.innerHTML = '', 3000);
+            }
+        }
+
+        function switchToTeacherMode() {
+            // Check password
+            const password = prompt('Voer het leerkracht wachtwoord in:');
+            if (password !== teacherPassword) {
+                alert('Onjuist wachtwoord!');
+                return;
+            }
+
+            // Update UI
+            document.getElementById('teacherModeBtn').classList.add('active');
+            document.getElementById('studentModeBtn').classList.remove('active');
+            document.getElementById('teacherSection').classList.add('active');
+            document.getElementById('studentSection').classList.remove('active');
+
+            // Load teacher data
+            loadStudents();
+            loadTasks();
+        }
+
+        function switchToStudentMode() {
+            // Update UI
+            document.getElementById('studentModeBtn').classList.add('active');
+            document.getElementById('teacherModeBtn').classList.remove('active');
+            document.getElementById('studentSection').classList.add('active');
+            document.getElementById('teacherSection').classList.remove('active');
+
+            // Load student data
+            loadStudentsList();
+        }
+
+        // Student Management
+        async function loadStudents() {
+            try {
+                const { data, error } = await supabase
+                    .from('students')
+                    .select('*')
+                    .order('name');
+
+                if (error) throw error;
+
+                const container = document.getElementById('studentsList');
+                if (data.length === 0) {
+                    container.innerHTML = '<p style="color: #6b7280; text-align: center; padding: 20px;">Nog geen leerlingen toegevoegd</p>';
+                    return;
+                }
+
+                container.innerHTML = data.map(student => `
+                    <div class="list-item">
+                        <span>${student.name}</span>
+                        <button class="btn btn-danger" onclick="deleteStudent('${student.name}')">
+                            🗑️ Verwijder
+                        </button>
+                    </div>
+                `).join('');
+
+            } catch (error) {
+                console.error('Fout bij laden leerlingen:', error);
+                document.getElementById('studentsList').innerHTML = 
+                    `<div class="alert error">Fout bij laden: ${error.message}</div>`;
+            }
+        }
+
+        async function addStudent() {
+            const name = document.getElementById('newStudentName').value.trim();
+            if (!name) {
+                alert('Voer een naam in!');
+                return;
+            }
+
+            try {
+                const { error } = await supabase
+                    .from('students')
+                    .insert([{ name }]);
+
+                if (error) throw error;
+
+                document.getElementById('newStudentName').value = '';
+                loadStudents();
+                loadStudentsList(); // Update student dropdown
+
+            } catch (error) {
+                console.error('Fout bij toevoegen leerling:', error);
+                if (error.message.includes('duplicate')) {
+                    alert('Deze naam bestaat al!');
+                } else {
+                    alert(`Fout: ${error.message}`);
+                }
+            }
+        }
+
+        async function deleteStudent(name) {
+            if (!confirm(`Weet je zeker dat je ${name} wilt verwijderen? Dit verwijdert ook alle voortgang.`)) {
+                return;
+            }
+
+            try {
+                const { error } = await supabase
+                    .from('students')
+                    .delete()
+                    .eq('name', name);
+
+                if (error) throw error;
+
+                loadStudents();
+                loadStudentsList();
+
+            } catch (error) {
+                console.error('Fout bij verwijderen leerling:', error);
+                alert(`Fout: ${error.message}`);
+            }
+        }
+
+        // Task Management
+        async function loadTasks() {
+            try {
+                const { data, error } = await supabase
+                    .from('tasks')
+                    .select('*')
+                    .order('name');
+
+                if (error) throw error;
+
+                const container = document.getElementById('tasksList');
+                if (data.length === 0) {
+                    container.innerHTML = '<p style="color: #6b7280; text-align: center; padding: 20px;">Nog geen taken toegevoegd</p>';
+                    return;
+                }
+
+                container.innerHTML = data.map(task => `
+                    <div class="list-item">
+                        <span>${task.name}</span>
+                        <button class="btn btn-danger" onclick="deleteTask('${task.name}')">
+                            🗑️ Verwijder
+                        </button>
+                    </div>
+                `).join('');
+
+            } catch (error) {
+                console.error('Fout bij laden taken:', error);
+                document.getElementById('tasksList').innerHTML = 
+                    `<div class="alert error">Fout bij laden: ${error.message}</div>`;
+            }
+        }
+
+        async function addTask() {
+            const name = document.getElementById('newTaskName').value.trim();
+            if (!name) {
+                alert('Voer een taaknaam in!');
+                return;
+            }
+
+            try {
+                const { error } = await supabase
+                    .from('tasks')
+                    .insert([{ name }]);
+
+                if (error) throw error;
+
+                document.getElementById('newTaskName').value = '';
+                loadTasks();
+
+                // Refresh student view if a student is selected
+                if (currentStudent) {
+                    loadStudentTasks();
+                }
+
+            } catch (error) {
+                console.error('Fout bij toevoegen taak:', error);
+                if (error.message.includes('duplicate')) {
+                    alert('Deze taak bestaat al!');
+                } else {
+                    alert(`Fout: ${error.message}`);
+                }
+            }
+        }
+
+        async function deleteTask(name) {
+            if (!confirm(`Weet je zeker dat je de taak "${name}" wilt verwijderen? Dit verwijdert ook alle voortgang.`)) {
+                return;
+            }
+
+            try {
+                const { error } = await supabase
+                    .from('tasks')
+                    .delete()
+                    .eq('name', name);
+
+                if (error) throw error;
+
+                loadTasks();
+
+                // Refresh student view if a student is selected
+                if (currentStudent) {
+                    loadStudentTasks();
+                }
+
+            } catch (error) {
+                console.error('Fout bij verwijderen taak:', error);
+                alert(`Fout: ${error.message}`);
+            }
+        }
+
+        // Student View
+        async function loadStudentsList() {
+            try {
+                const { data, error } = await supabase
+                    .from('students')
+                    .select('*')
+                    .order('name');
+
+                if (error) throw error;
+
+                const select = document.getElementById('studentSelect');
+                select.innerHTML = '<option value="">-- Kies je naam --</option>' +
+                    data.map(student => `<option value="${student.name}">${student.name}</option>`).join('');
+
+            } catch (error) {
+                console.error('Fout bij laden leerlingen lijst:', error);
+            }
+        }
+
+        async function loadStudentTasks() {
+            const studentName = document.getElementById('studentSelect').value;
+            if (!studentName) {
+                document.getElementById('studentInfo').style.display = 'none';
+                return;
+            }
+
+            currentStudent = studentName;
+            document.getElementById('studentInfo').style.display = 'block';
+            document.getElementById('selectedStudentName').textContent = `Welkom ${studentName}! 👋`;
+
+            try {
+                // Load all tasks
+                const { data: tasks, error: tasksError } = await supabase
+                    .from('tasks')
+                    .select('*')
+                    .order('name');
+
+                if (tasksError) throw tasksError;
+
+                // Load completions for this student
+                const { data: completions, error: completionsError } = await supabase
+                    .from('completions')
+                    .select('*')
+                    .eq('student_name', studentName);
+
+                if (completionsError) throw completionsError;
+
+                const completedTasks = new Set(completions.map(c => c.task_name));
+                const totalTasks = tasks.length;
+                const completedCount = completedTasks.size;
+
+                // Update progress
+                const progress = totalTasks > 0 ? (completedCount / totalTasks) * 100 : 0;
+                document.getElementById('progressFill').style.width = `${progress}%`;
+                document.getElementById('progressText').textContent = `${completedCount} van ${totalTasks} taken voltooid`;
+
+                // Render tasks
+                const container = document.getElementById('studentTasks');
+                if (tasks.length === 0) {
+                    container.innerHTML = '<p style="color: #6b7280; text-align: center; padding: 40px;">Nog geen taken beschikbaar</p>';
+                    return;
+                }
+
+                container.innerHTML = tasks.map(task => {
+                    const isCompleted = completedTasks.has(task.name);
+                    return `
+                        <div class="task-item ${isCompleted ? 'completed' : ''}" onclick="toggleTask('${task.name}')">
+                            <input type="checkbox" class="task-checkbox" ${isCompleted ? 'checked' : ''} onchange="toggleTask('${task.name}')">
+                            <span class="task-name">${task.name}</span>
+                            ${isCompleted ? '<span style="color: #10b981;">✅</span>' : '<span style="color: #6b7280;">⭕</span>'}
+                        </div>
+                    `;
+                }).join('');
+
+            } catch (error) {
+                console.error('Fout bij laden student taken:', error);
+                document.getElementById('studentTasks').innerHTML = 
+                    `<div class="alert error">Fout bij laden: ${error.message}</div>`;
+            }
+        }
+
+        async function toggleTask(taskName) {
+            if (!currentStudent) return;
+
+            try {
+                // Check if task is already completed
+                const { data: existing, error: checkError } = await supabase
+                    .from('completions')
+                    .select('*')
+                    .eq('student_name', currentStudent)
+                    .eq('task_name', taskName);
+
+                if (checkError) throw checkError;
+
+                if (existing.length > 0) {
+                    // Task is completed, remove it
+                    const { error } = await supabase
+                        .from('completions')
+                        .delete()
+                        .eq('student_name', currentStudent)
+                        .eq('task_name', taskName);
+
+                    if (error) throw error;
+                } else {
+                    // Task is not completed, add it
+                    const { error } = await supabase
+                        .from('completions')
+                        .insert([{ 
+                            student_name: currentStudent, 
+                            task_name: taskName 
+                        }]);
+
+                    if (error) throw error;
+                }
+
+                // Reload tasks to update UI
+                loadStudentTasks();
+
+            } catch (error) {
+                console.error('Fout bij wijzigen taakstatus:', error);
+                alert(`Fout: ${error.message}`);
+            }
+        }
+
+        async function resetAllProgress() {
+            if (!confirm('Weet je zeker dat je alle voortgang wilt resetten? Dit kan niet ongedaan worden gemaakt!')) {
+                return;
+            }
+
+            try {
+                const { error } = await supabase
+                    .from('completions')
+                    .delete()
+                    .neq('id', 0); // Delete all records
+
+                if (error) throw error;
+
+                alert('Alle voortgang is gereset! 🔄');
+
+                // Refresh student view if active
+                if (currentStudent) {
+                    loadStudentTasks();
+                }
+
+            } catch (error) {
+                console.error('Fout bij resetten voortgang:', error);
+                alert(`Fout: ${error.message}`);
+            }
+        }
+
+        // Real-time updates (optional enhancement)
+        function setupRealtimeUpdates() {
+            if (!supabase) return;
+
+            // Listen for changes in completions
+            supabase
+                .channel('completions')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'completions' }, () => {
+                    if (currentStudent) {
+                        loadStudentTasks();
+                    }
+                })
+                .subscribe();
+
+            // Listen for changes in students
+            supabase
+                .channel('students')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => {
+                    if (document.getElementById('teacherSection').classList.contains('active')) {
+                        loadStudents();
+                    }
+                    if (document.getElementById('studentSection').classList.contains('active')) {
+                        loadStudentsList();
+                    }
+                })
+                .subscribe();
+
+            // Listen for changes in tasks
+            supabase
+                .channel('tasks')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
+                    if (document.getElementById('teacherSection').classList.contains('active')) {
+                        loadTasks();
+                    }
+                    if (currentStudent) {
+                        loadStudentTasks();
+                    }
+                })
+                .subscribe();
+        }
+
+        // Initialize real-time updates when connected
+        function initializeApp() {
+            setupRealtimeUpdates();
+        }
+
+        // Auto-save functionality for better UX
+        let autoSaveInterval;
+        
+        function startAutoSave() {
+            // Auto-refresh every 30 seconds to catch any missed updates
+            autoSaveInterval = setInterval(() => {
+                if (currentStudent) {
+                    loadStudentTasks();
+                }
+            }, 30000);
+        }
+
+        function stopAutoSave() {
+            if (autoSaveInterval) {
+                clearInterval(autoSaveInterval);
+            }
+        }
+
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            stopAutoSave();
+        });
+
+        // Initialize auto-save when database is connected
+        document.addEventListener('DOMContentLoaded', () => {
+            startAutoSave();
+        });
+    </script>
+</body>
+</html>
